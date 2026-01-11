@@ -15,18 +15,20 @@ Modular Architecture: Clean, production-ready code structure (not just a single 
 🛠 Project Structure
 The repository is organized into a modular structure to ensure maintainability and reproducibility:
 
-Plaintext
+## 📁 Repository Structure
+```text
 trading-pipeline/
 ├── src/
-│   ├── auth.py         # FYERS API Authentication & Token Management
-│   ├── data_loader.py  # Historical and Real-time data fetching
-│   ├── features.py     # Feature engineering (Lags, Moving Averages)
-│   ├── model_engine.py # Training logic & Recursive forecasting
-│   └── backtest.py     # Evaluation metrics (MAE, R2)
-├── main.py             # Main entry point for the pipeline
-├── .env                # API Credentials (Local only)
-├── requirements.txt    # Python dependencies
-└── README.md           # Documentation
+│   ├── auth.py          # API Authentication logic
+│   ├── data_loader.py   # Data fetching from FYERS
+│   ├── features.py     # Feature engineering (MAs and Lags)
+│   ├── model_engine.py  # RF Training & Recursive forecasting
+│   └── backtest.py      # Validation and Visualization
+├── main.py              # Entry point
+├── .env                 # API Credentials (Private)
+├── requirements.txt     # Dependencies
+└── README.md            # Documentation
+```
 ⚙️ Setup and Installation
 1. Prerequisites
 
@@ -39,7 +41,7 @@ A FYERS account with API access.
 Clone the repository and install the required libraries:
 
 Bash
-git clone https://github.com/your-username/your-repo-name.git
+git clone https://github.com/Adityaraj142857/trading-pipeline
 cd your-repo-name
 pip install -r requirements.txt
 3. Environment Configuration
