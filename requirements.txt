@@ -1,0 +1,8 @@
+fyers-apiv3
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+statsmodels
+python-dotenv
