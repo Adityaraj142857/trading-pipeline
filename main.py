@@ -1,63 +1,56 @@
 import os
 import pandas as pd
-import matplotlib.pyplot as plt
 from src.auth import get_fyers_session, generate_access_token
 from src.data_loader import fetch_data
-from src.model_engine import train_model, predict_future
+from src.model_engine import train_model, predict_future_recursive
+from src.backtest import calculate_trading_metrics, plot_final_results
 from fyers_apiv3 import fyersModel
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def run_pipeline():
-    # 1. Auth
+def main():
+    # 1. API Login
     session = get_fyers_session()
-    print("Login URL:", session.generate_authcode())
-    auth_code = input("Enter auth_code from URL: ")
-    access_token = generate_access_token(auth_code)
-    fyers = fyersModel.FyersModel(client_id=os.getenv("FYERS_CLIENT_ID"), token=access_token, log_path="")
+    print("Open this URL:", session.generate_authcode())
+    auth_code = input("Enter auth_code: ")
+    token = generate_access_token(auth_code)
+    fyers = fyersModel.FyersModel(client_id=os.getenv("FYERS_CLIENT_ID"), token=token, log_path="")
 
-    # 2. Fetch Historical Data (Training)
-    print("Fetching training data (Nov-Dec 2025)...")
-    df_train = fetch_data(fyers, range_from="2025-11-01", range_to="2025-12-31")
+    # 2. Fetch Training Data (2025)
+    print("Fetching 2025 data for training...")
+    df_2025 = fetch_data(fyers, range_from="2025-01-01", range_to="2025-12-31")
 
-    # 3. Train Model
-    print("Training Random Forest...")
-    model, features = train_model(df_train)
+    # 3. Split & Train (Crucial for Sharpe accuracy)
+    # We use 80% for training and 20% for backtesting
+    split = int(len(df_2025) * 0.8)
+    train_df = df_2025.iloc[:split]
+    test_df = df_2025.iloc[split:].copy()
 
-    # 4. Predict Future (Recursive)
-    print("Predicting next 5 days...")
-    preds = predict_future(df_train, model, features, steps=5)
+    print("Training Model...")
+    model, features = train_model(train_df)
 
-    # 5. Fetch Real Future Data (Validation)
-    print("Fetching REAL data for Jan 2026 comparison...")
+    # 4. Run Backtest on Test Set
+    # First, generate MAs for the test set to avoid KeyError
+    test_df['MA_5'] = test_df['close'].rolling(window=5).mean()
+    test_df['MA_20'] = test_df['close'].rolling(window=20).mean()
+    test_df = test_df.dropna()
+    
+    test_df['Predicted'] = model.predict(test_df[features])
+    calculate_trading_metrics(test_df)
+
+    # 5. Recursive Prediction (Future 5 Days)
+    print("Forecasting Jan 2026 prices...")
+    future_preds = predict_future_recursive(df_2025, model, features, steps=5)
+
+    # 6. Fetch Real Jan 2026 Data for final validation
+    print("Fetching actual market data for Jan 2026...")
     df_real = fetch_data(fyers, range_from="2026-01-01", range_to="2026-01-07")
-    
-    # Standardize lengths for printing
-    print("\n--- RESULTS COMPARISON ---")
-    for i in range(len(preds)):
-        actual_str = f"{df_real.iloc[i]['close']:.2f}" if i < len(df_real) else "N/A"
-        print(f"Day {i+1}: Predicted: {preds[i]:.2f} | Actual: {actual_str}")
+    Predicted = pd.Series(future_preds, name="Predicted")
+    df_real = pd.concat([df_real, Predicted], axis=1)
+    # plot_final_results(df_2025, future_preds, df_real)
+    plot_final_results(df_2025, df_real['Predicted'], df_real)
 
-    # 6. Final Visualization
-    plt.figure(figsize=(14, 7))
-    # Plot Training Tail
-    plt.plot(df_train['timestamp'].tail(15), df_train['close'].tail(15), label='Historical (Dec 2025)', color='blue')
-    
-    # Plot Predictions
-    future_dates = [df_train['timestamp'].max() + pd.Timedelta(days=i) for i in range(1, 6)]
-    plt.plot(future_dates, preds, label='Model Prediction', color='red', marker='o', linestyle='--')
-    
-    # Plot Real Data
-    if not df_real.empty:
-        plt.plot(df_real['timestamp'], df_real['close'], label='Actual Market Data', color='green', marker='x')
-
-    plt.title("IRCON Prediction vs Actual (Jan 2026)")
-    plt.xlabel("Date")
-    plt.ylabel("Price")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
 
 if __name__ == "__main__":
-    run_pipeline()
+    main()
